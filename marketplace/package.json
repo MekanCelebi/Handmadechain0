@@ -1,0 +1,29 @@
+{
+  "type": "module",
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/icons-material": "^7.1.0",
+    "@mui/material": "^7.1.0",
+    "@openzeppelin/contracts": "^5.3.0",
+    "alchemy-sdk": "^3.6.0",
+    "axios": "^1.9.0",
+    "ethers": "^5.8.0",
+    "form-data": "^4.0.0",
+    "react-router-dom": "^7.6.1"
+  },
+  "name": "marketplace",
+  "description": "**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**",
+  "version": "1.0.0",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

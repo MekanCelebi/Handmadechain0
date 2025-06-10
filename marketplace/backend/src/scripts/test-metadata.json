@@ -1,0 +1,15 @@
+{
+    "name": "Test Handmade NFT",
+    "description": "This is a test handmade NFT for our marketplace",
+    "image": "https://ipfs.io/ipfs/QmYx4t7J9oX4t7J9oX4t7J9oX4t7J9oX4t7J9oX4t7J9oX4t7",
+    "attributes": [
+        {
+            "trait_type": "Category",
+            "value": "Handmade"
+        },
+        {
+            "trait_type": "Creator",
+            "value": "Test Artist"
+        }
+    ]
+} 
