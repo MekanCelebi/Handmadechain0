@@ -19,9 +19,25 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  Breadcrumbs,
+  Link,
+  IconButton,
+  Tooltip,
+  Badge
 } from '@mui/material';
-import { ShoppingCart as CartIcon } from '@mui/icons-material';
+import { 
+  ShoppingCart as CartIcon,
+  NavigateNext as NavigateNextIcon,
+  Home as HomeIcon,
+  Store as StoreIcon,
+  Share as ShareIcon,
+  Favorite as FavoriteIcon,
+  Visibility as VisibilityIcon,
+  LocalShipping as ShippingIcon,
+  Security as SecurityIcon,
+  Verified as VerifiedIcon
+} from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import axios from 'axios';
 import { useWeb3 } from '../contexts/Web3Context';
@@ -32,6 +48,7 @@ import { toast } from 'react-toastify';
 import NFTListForm from '../components/NFTListForm';
 import NFTBuyButton from '../components/NFTBuyButton';
 import { API_BASE_URL } from '../config';
+import { formatIPFSUrl } from '../utils/ipfs';
 
 // Import contract ABI
 const NFTMarketplaceABI = require('../contracts/NFTMarketplace.json').abi;
@@ -40,15 +57,76 @@ const NFTMarketplaceABI = require('../contracts/NFTMarketplace.json').abi;
 const ProductImage = styled('img')(({ theme }) => ({
   width: '100%',
   height: 'auto',
-  borderRadius: theme.shape.borderRadius,
-  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
+  borderRadius: theme.spacing(2),
+  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+  transition: 'transform 0.3s ease',
+  '&:hover': {
+    transform: 'scale(1.02)',
+  },
 }));
 
 const PriceTag = styled(Box)(({ theme }) => ({
+  padding: theme.spacing(3),
+  borderRadius: theme.spacing(2),
+  background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+  border: '1px solid rgba(102, 126, 234, 0.2)',
+  marginBottom: theme.spacing(3),
+  textAlign: 'center',
+}));
+
+const ModernButton = styled(Button)(({ theme }) => ({
+  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+  color: 'white',
+  borderRadius: theme.spacing(2),
+  padding: theme.spacing(1.5, 3),
+  textTransform: 'none',
+  fontWeight: 600,
+  fontSize: '1rem',
+  boxShadow: '0 4px 15px rgba(102, 126, 234, 0.3)',
+  transition: 'all 0.3s ease',
+  '&:hover': {
+    transform: 'translateY(-2px)',
+    boxShadow: '0 8px 25px rgba(102, 126, 234, 0.4)',
+    background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
+  },
+}));
+
+const NFTInfoCard = styled(Paper)(({ theme }) => ({
+  padding: theme.spacing(3),
+  background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%)',
+  border: '1px solid rgba(102, 126, 234, 0.1)',
+  borderRadius: theme.spacing(2),
+  marginBottom: theme.spacing(3),
+}));
+
+const SellerCard = styled(Paper)(({ theme }) => ({
+  padding: theme.spacing(3),
+  background: 'rgba(255, 255, 255, 0.8)',
+  backdropFilter: 'blur(10px)',
+  border: '1px solid rgba(255, 255, 255, 0.2)',
+  borderRadius: theme.spacing(2),
+  marginBottom: theme.spacing(3),
+  transition: 'all 0.3s ease',
+  '&:hover': {
+    transform: 'translateY(-2px)',
+    boxShadow: '0 8px 25px rgba(0, 0, 0, 0.1)',
+  },
+}));
+
+const FeatureCard = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
   padding: theme.spacing(2),
-  borderRadius: theme.shape.borderRadius,
-  background: 'linear-gradient(135deg, rgba(108, 99, 255, 0.1) 0%, rgba(255, 101, 132, 0.1) 100%)',
-  marginBottom: theme.spacing(3)
+  borderRadius: theme.spacing(1.5),
+  background: 'rgba(255, 255, 255, 0.6)',
+  backdropFilter: 'blur(10px)',
+  border: '1px solid rgba(255, 255, 255, 0.2)',
+  marginBottom: theme.spacing(1),
+  transition: 'all 0.3s ease',
+  '&:hover': {
+    background: 'rgba(255, 255, 255, 0.8)',
+    transform: 'translateX(5px)',
+  },
 }));
 
 // ProductDetail component
@@ -77,7 +155,6 @@ const ProductDetail = () => {
   const [error, setError] = useState('');
   const [purchaseDialog, setPurchaseDialog] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
-  const [favorite, setFavorite] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [transferDialog, setTransferDialog] = useState(false);
   const [transferAddress, setTransferAddress] = useState('');
@@ -132,7 +209,7 @@ const ProductDetail = () => {
         }
 
         // NFT'nin sahibi mi kontrol et
-        if (contract && account) {
+        if (contract && account && typeof contract.ownerOf === 'function') {
           try {
         const owner = await contract.ownerOf(tokenId);
             setIsOwner(owner.toLowerCase() === account.toLowerCase());
@@ -140,10 +217,13 @@ const ProductDetail = () => {
             console.error('Sahiplik kontrolü hatası:', error);
             setIsOwner(false);
           }
+        } else {
+          console.log('ownerOf fonksiyonu mevcut değil veya contract yüklenmedi');
+          setIsOwner(false);
         }
 
         // NFT'nin satışta olup olmadığını kontrol et
-        if (contract) {
+        if (contract && typeof contract.listings === 'function') {
           try {
         const listing = await contract.listings(tokenId);
         const isListedContract = listing.isActive;
@@ -158,6 +238,8 @@ const ProductDetail = () => {
           } catch (error) {
             console.error('Listing kontrolü hatası:', error);
           }
+        } else {
+          console.log('listings fonksiyonu mevcut değil veya contract yüklenmedi');
         }
       } catch (error) {
         console.error('NFT yükleme hatası:', error);
@@ -284,7 +366,12 @@ const ProductDetail = () => {
           }
         });
         
-        toast.success('Ödeme başarıyla oluşturuldu!');
+        toast.success('Ödeme başarıyla oluşturuldu! Siparişlerinizi görüntülemek için yönlendiriliyorsunuz...');
+        
+        // Kullanıcıyı profil sayfasındaki siparişlerim sekmesine yönlendir
+        setTimeout(() => {
+          navigate('/profile?tab=orders');
+        }, 2000);
       }
     } catch (err) {
       console.error('Ödeme hatası:', err);
@@ -368,11 +455,6 @@ const ProductDetail = () => {
     }
   };
 
-  const toggleFavorite = () => {
-    setFavorite(!favorite);
-    // Favori işlemlerini backend'e kaydet
-  };
-
   const shareProduct = () => {
     if (navigator.share) {
       navigator.share({
@@ -388,16 +470,146 @@ const ProductDetail = () => {
   };
 
   const handleIpfsClick = async () => {
-    if (!nft?.tokenURI) return;
+    // Önce nft.tokenURI'yi dene, yoksa product.ipfsCID'yi kullan
+    const tokenURI = nft?.tokenURI || (product?.ipfsCID ? `ipfs://${product.ipfsCID}` : null);
+    
+    if (!tokenURI) {
+      toast.error('Token URI veya IPFS CID bulunamadı');
+      return;
+    }
     
     try {
     setLoadingMetadata(true);
-      const response = await axios.get(nft.tokenURI);
-      setIpfsMetadata(response.data);
+      
+      // IPFS URL'sini gateway URL'sine çevir
+      const gatewayUrl = formatIPFSUrl(tokenURI);
+      console.log('Original tokenURI:', tokenURI);
+      console.log('Gateway URL:', gatewayUrl);
+      
+      // Farklı gateway'leri dene
+      const gateways = [
+        'https://ipfs.io/ipfs/',
+        'https://gateway.pinata.cloud/ipfs/',
+        'https://cloudflare-ipfs.com/ipfs/',
+        'https://dweb.link/ipfs/'
+      ];
+      
+      let response = null;
+      let lastError = null;
+      
+      for (const gateway of gateways) {
+        try {
+          const hash = tokenURI.replace('ipfs://', '').replace('/ipfs/', '');
+          const testUrl = `${gateway}${hash}`;
+          console.log('Trying gateway:', testUrl);
+          
+          response = await axios.get(testUrl, {
+            timeout: 10000, // 10 saniye timeout
+            headers: {
+              'Accept': 'application/json, text/plain, */*',
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          console.log('Success with gateway:', gateway);
+          break;
+        } catch (error) {
+          console.log('Failed with gateway:', gateway, error.message);
+          lastError = error;
+        }
+      }
+      
+      if (!response) {
+        throw lastError || new Error('Tüm gateway\'ler başarısız oldu');
+      }
+      
+      // Response data'yı kontrol et
+      if (!response.data) {
+        throw new Error('Boş response data');
+      }
+      
+      // Content-Type kontrolü yap
+      const contentType = response.headers['content-type'] || '';
+      console.log('Response Content-Type:', contentType);
+      
+      let metadata = response.data;
+      
+      // Eğer content-type image ise veya response.data binary ise, bu bir resim dosyası
+      if (contentType.startsWith('image/') || 
+          (typeof response.data === 'string' && response.data.includes('')) ||
+          (Buffer.isBuffer && Buffer.isBuffer(response.data))) {
+        console.log('Response bir resim dosyası, metadata objesi oluşturuluyor');
+        metadata = {
+          name: product?.name || 'Unknown',
+          description: product?.description || 'No description available',
+          image: gatewayUrl // Orijinal gateway URL'ini kullan
+        };
+      } else if (typeof response.data === 'string') {
+        // Eğer string bir URL ise (image URL), metadata objesi oluştur
+        if (response.data.startsWith('http') || response.data.startsWith('ipfs://')) {
+          console.log('Response bir URL, metadata objesi oluşturuluyor');
+          metadata = {
+            name: product?.name || 'Unknown',
+            description: product?.description || 'No description available',
+            image: response.data
+          };
+        } else {
+          // JSON string olarak parse etmeye çalış
+          try {
+            metadata = JSON.parse(response.data);
+            console.log('JSON metadata başarıyla parse edildi:', metadata);
+          } catch (parseError) {
+            console.error('JSON parse hatası:', parseError);
+            console.log('Response data (first 100 chars):', response.data.substring(0, 100));
+            
+            // Eğer parse edilemezse, varsayılan metadata oluştur
+            metadata = {
+              name: product?.name || 'Unknown',
+              description: product?.description || 'No description available',
+              image: gatewayUrl
+            };
+          }
+        }
+      } else if (typeof response.data === 'object') {
+        // Zaten object ise, doğrudan kullan
+        metadata = response.data;
+        console.log('Object metadata alındı:', metadata);
+      } else {
+        throw new Error('Bilinmeyen response data tipi');
+      }
+      
+      // Metadata'nın gerekli alanları var mı kontrol et
+      if (!metadata.name && !metadata.description && !metadata.image) {
+        console.log('Metadata eksik alanlar içeriyor, varsayılan değerler ekleniyor');
+        metadata = {
+          name: metadata.name || product?.name || 'Unknown',
+          description: metadata.description || product?.description || 'No description available',
+          image: metadata.image || product?.image || gatewayUrl
+        };
+      }
+      
+      // Eğer metadata'da IPFS image URL'i varsa, gateway URL'ine çevir
+      if (metadata.image && metadata.image.startsWith('ipfs://')) {
+        console.log('IPFS image URL gateway URL\'ine çevriliyor:', metadata.image);
+        metadata.image = formatIPFSUrl(metadata.image);
+      }
+      
+      console.log('Final metadata:', metadata);
+      setIpfsMetadata(metadata);
       setIpfsDialog(true);
     } catch (error) {
       console.error('Metadata yükleme hatası:', error);
-      toast.error('Metadata yüklenirken bir hata oluştu');
+      let errorMessage = 'Metadata yüklenirken bir hata oluştu';
+      
+      if (error.response) {
+        errorMessage += `: ${error.response.status} - ${error.response.statusText}`;
+      } else if (error.request) {
+        errorMessage += ': Ağ bağlantısı hatası';
+      } else {
+        errorMessage += `: ${error.message}`;
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setLoadingMetadata(false);
     }
@@ -712,206 +924,354 @@ const ProductDetail = () => {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
+      {/* Breadcrumbs */}
+      <Breadcrumbs 
+        separator={<NavigateNextIcon fontSize="small" />} 
+        sx={{ mb: 4 }}
+      >
+        <Link
+          color="inherit"
+          href="/"
+          onClick={(e) => {
+            e.preventDefault();
+            navigate('/');
+          }}
+          sx={{ 
+            display: 'flex', 
+            alignItems: 'center',
+            textDecoration: 'none',
+            '&:hover': { textDecoration: 'underline' }
+          }}
+        >
+          <HomeIcon sx={{ mr: 0.5 }} fontSize="small" />
+          Anasayfa
+        </Link>
+        <Link
+          color="inherit"
+          href={`/category/${encodeURIComponent(product.category)}`}
+          onClick={(e) => {
+            e.preventDefault();
+            navigate(`/category/${encodeURIComponent(product.category)}`);
+          }}
+          sx={{ 
+            display: 'flex', 
+            alignItems: 'center',
+            textDecoration: 'none',
+            '&:hover': { textDecoration: 'underline' }
+          }}
+        >
+          <StoreIcon sx={{ mr: 0.5 }} fontSize="small" />
+          {product.category}
+        </Link>
+        <Typography color="text.primary">{product.name}</Typography>
+      </Breadcrumbs>
+
       <Grid container spacing={4}>
+        {/* Sol taraf - Ürün Görselleri */}
         <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 2 }}>
-            <img
+          <Paper sx={{ p: 3, borderRadius: 3, background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(10px)' }}>
+            <ProductImage
               src={product.gatewayUrls?.[activeStep] || (product.images[activeStep]?.startsWith('ipfs://') ? `${API_BASE_URL}/${product.images[activeStep].replace('ipfs://', '')}` : `${API_BASE_URL}/${product.images[activeStep]}`)}
               alt={product.name}
-              style={{
-                width: '100%',
-                height: 'auto',
-                borderRadius: '8px'
-              }}
             />
+            
+            {/* Küçük Görseller */}
+            {product.images && product.images.length > 1 && (
+              <Box sx={{ mt: 3, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                {product.images.map((image, index) => (
+                  <img
+                    key={index}
+                    src={product.gatewayUrls?.[index] || (image?.startsWith('ipfs://') ? `${API_BASE_URL}/${image.replace('ipfs://', '')}` : `${API_BASE_URL}/${image}`)}
+                    alt={`${product.name} ${index + 1}`}
+              style={{
+                      width: 80,
+                      height: 80,
+                      objectFit: 'cover',
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                      border: activeStep === index ? '2px solid #667eea' : '2px solid transparent',
+                      transition: 'all 0.3s ease',
+                    }}
+                    onClick={() => setActiveStep(index)}
+                  />
+                ))}
+              </Box>
+            )}
           </Paper>
         </Grid>
 
+        {/* Sağ taraf - Ürün Bilgileri */}
         <Grid item xs={12} md={6}>
-          <Typography variant="h4" gutterBottom>
+          {/* Ürün Başlığı ve Kategoriler */}
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h3" gutterBottom sx={{ fontWeight: 700, color: '#2d3748', mb: 2 }}>
             {product.name}
           </Typography>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <Avatar
-              src={product.creator?.avatar}
-              sx={{ width: 40, height: 40, mr: 1 }}
-            />
-            <Typography variant="subtitle1">
-              {product.creator?.username || 'Anonim Satıcı'}
-            </Typography>
-          </Box>
-
-          <Typography variant="body1" sx={{ mb: 3 }}>
-            {product.description}
-          </Typography>
-
-          <Box sx={{ mb: 3 }}>
+            <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>
             <Chip
               label={product.category}
               color="primary"
-              sx={{ mr: 1 }}
-            />
-            {product.nft && (
-              <Chip
-                label="NFT"
-                color="secondary"
                 sx={{
-                  background: 'linear-gradient(135deg, #6C63FF 0%, #FF6584 100%)',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                   color: 'white',
-                  fontWeight: 'bold',
-                  '&:hover': {
-                    background: 'linear-gradient(135deg, #5B52E5 0%, #E55473 100%)'
-                  }
+                  fontWeight: 600
                 }}
               />
-            )}
+              {product.nft && (
+                <Chip
+                  icon={<VerifiedIcon />}
+                  label="NFT Doğrulandı"
+                  color="success"
+                  sx={{ fontWeight: 600 }}
+                />
+              )}
+              <Chip
+                label={product.sold ? 'Satıldı' : 'Satışta'}
+                color={product.sold ? 'error' : 'success'}
+                variant="outlined"
+              />
+            </Box>
           </Box>
 
+          {/* Satıcı Bilgileri */}
+          <SellerCard>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <Avatar
+                src={product.creator?.avatar}
+                sx={{ 
+                  width: 50, 
+                  height: 50, 
+                  mr: 2,
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                }}
+              >
+                {product.creator?.username?.charAt(0).toUpperCase() || 'S'}
+              </Avatar>
+              <Box>
+                <Typography variant="h6" sx={{ fontWeight: 600, color: '#2d3748' }}>
+                  {product.creator?.username || 'Anonim Satıcı'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Güvenilir Satıcı
+                </Typography>
+              </Box>
+            </Box>
+            
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Tooltip title="Paylaş">
+                <IconButton size="small" onClick={shareProduct}>
+                  <ShareIcon />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Satıcı Profili">
+                <IconButton size="small">
+                  <VisibilityIcon />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          </SellerCard>
+
+          {/* Fiyat */}
           <PriceTag>
-            <Typography variant="h4">
+            <Typography variant="h2" sx={{ 
+              fontWeight: 700,
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              backgroundClip: 'text',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              mb: 1
+            }}>
               {formatBigNumber(product.price)} ETH
             </Typography>
-            <Typography variant="subtitle1">
-              ≈ ${(product.price * 2000).toFixed(2)}
+            <Typography variant="h6" color="text.secondary">
+              ≈ ${(product.price * 2000).toFixed(2)} USD
             </Typography>
           </PriceTag>
 
-          {product.nft && (
-            <Paper 
-              sx={{ 
-                p: 3, 
-                mb: 3,
-                background: 'linear-gradient(135deg, rgba(108, 99, 255, 0.05) 0%, rgba(255, 101, 132, 0.05) 100%)',
-                border: '1px solid rgba(108, 99, 255, 0.1)'
-              }}
+          {/* Özellikler */}
+          <Box sx={{ mb: 3 }}>
+            <FeatureCard>
+              <SecurityIcon sx={{ mr: 2, color: '#667eea' }} />
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                  Güvenli Ödeme
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Escrow sistemi ile korumalı
+                </Typography>
+              </Box>
+            </FeatureCard>
+            
+            <FeatureCard>
+              <ShippingIcon sx={{ mr: 2, color: '#667eea' }} />
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                  Hızlı Teslimat
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Güvenli kargo ile gönderim
+                </Typography>
+              </Box>
+            </FeatureCard>
+            
+            <FeatureCard>
+              <VerifiedIcon sx={{ mr: 2, color: '#667eea' }} />
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                  NFT Doğrulaması
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Blockchain üzerinde kayıtlı
+                </Typography>
+              </Box>
+            </FeatureCard>
+          </Box>
+
+          {/* Satın Alma Butonu */}
+          {!account ? (
+            <ModernButton
+              fullWidth
+              size="large"
+              onClick={connectWallet}
+              sx={{ mb: 3 }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6" sx={{ mr: 1 }}>
+              Cüzdanı Bağla ve Satın Al
+            </ModernButton>
+          ) : (
+            <ModernButton
+              fullWidth
+              size="large"
+              onClick={handlePayment}
+              disabled={isProcessing}
+              sx={{ mb: 3 }}
+            >
+              {isProcessing ? (
+                <>
+                  <CircularProgress size={24} sx={{ mr: 1 }} />
+                  İşlem Yapılıyor...
+                </>
+              ) : (
+                <>
+                  <CartIcon sx={{ mr: 1 }} />
+                  NFT Olarak Satın Al
+                </>
+              )}
+            </ModernButton>
+          )}
+
+          {/* Escrow İşlemleri */}
+          {renderEscrowStatus()}
+        </Grid>
+      </Grid>
+
+      {/* Ürün Açıklaması */}
+      <Paper sx={{ p: 4, mt: 4, borderRadius: 3, background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(10px)' }}>
+        <Typography variant="h5" gutterBottom sx={{ fontWeight: 600, color: '#2d3748', mb: 3 }}>
+          Ürün Açıklaması
+        </Typography>
+        <Typography variant="body1" sx={{ lineHeight: 1.8, color: '#4a5568' }}>
+          {product.description}
+        </Typography>
+      </Paper>
+
+      {/* NFT Bilgileri */}
+      {product.nft && (
+        <NFTInfoCard sx={{ mt: 4 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+            <Typography variant="h5" sx={{ mr: 2, fontWeight: 600, color: '#2d3748' }}>
                   NFT Bilgileri
                 </Typography>
                 <Chip
                   label="On-Chain"
                   size="small"
                   color="success"
-                  sx={{ ml: 1 }}
+              icon={<VerifiedIcon />}
                 />
               </Box>
-              <Divider sx={{ mb: 2 }} />
               
-              <Grid container spacing={2}>
-                <Grid item xs={12}>
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={4}>
                   <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                    NFT ID:
+                NFT ID
                   </Typography>
-                  <Typography variant="body2" sx={{ wordBreak: 'break-all', mb: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, color: '#667eea' }}>
                     #{product.nft.tokenId}
                   </Typography>
                 </Grid>
 
-                <Grid item xs={12}>
+            <Grid item xs={12} md={4}>
                   <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                    Kontrat Adresi:
+                Kontrat Adresi
                   </Typography>
-                  <Typography variant="body2" sx={{ wordBreak: 'break-all', mb: 2 }}>
+              <Typography variant="body2" sx={{ wordBreak: 'break-all', color: '#4a5568' }}>
                     {product.nft.contractAddress}
                   </Typography>
                 </Grid>
 
-                <Grid item xs={12}>
+            <Grid item xs={12} md={4}>
                   <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                    Transaction Hash:
+                Transaction Hash
                   </Typography>
-                  <Typography variant="body2" sx={{ wordBreak: 'break-all', mb: 2 }}>
+              <Typography variant="body2" sx={{ wordBreak: 'break-all', color: '#4a5568' }}>
                     {product.nft.txHash}
                   </Typography>
+            </Grid>
                 </Grid>
 
-                <Grid item xs={12}>
+          <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                   <Button
                     variant="outlined"
                     color="primary"
-                    fullWidth
                     onClick={() => window.open(`https://sepolia.etherscan.io/tx/${product.nft.txHash}`, '_blank')}
-                    sx={{ mb: 1 }}
+              sx={{ borderRadius: 2 }}
                   >
                     Etherscan'de Görüntüle
                   </Button>
-                  {product.ipfsCID && (
+            {(product.ipfsCID || nft?.tokenURI) && (
                     <Button
                       variant="outlined"
                       color="secondary"
-                      fullWidth
                       onClick={handleIpfsClick}
+                sx={{ borderRadius: 2 }}
                     >
                       IPFS Metadata'yı Görüntüle
                     </Button>
                   )}
-                </Grid>
-              </Grid>
-            </Paper>
-          )}
+          </Box>
+        </NFTInfoCard>
+      )}
 
-          {!account ? (
-            <Button
-              variant="contained"
-              size="large"
-              fullWidth
-              onClick={connectWallet}
-              sx={{
-                background: 'linear-gradient(135deg, #6C63FF 0%, #FF6584 100%)',
-                '&:hover': { opacity: 0.9 },
-                mb: 3,
-              }}
-            >
-              Cüzdanı Bağla
-            </Button>
-          ) : (
-            <Button
-              variant="contained"
-              size="large"
-              fullWidth
-              onClick={handlePayment}
-              disabled={isProcessing}
-              sx={{
-                background: 'linear-gradient(135deg, #6C63FF 0%, #FF6584 100%)',
-                '&:hover': { opacity: 0.9 },
-                mb: 3,
-              }}
-            >
-              {isProcessing ? 'İşlem Yapılıyor...' : 'NFT Olarak Satın Al'}
-            </Button>
-          )}
-
-          {/* Escrow İşlemleri */}
-          {renderEscrowStatus()}
-
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
+      {/* Ürün Detayları */}
+      <Paper sx={{ p: 4, mt: 4, borderRadius: 3, background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(10px)' }}>
+        <Typography variant="h5" gutterBottom sx={{ fontWeight: 600, color: '#2d3748', mb: 3 }}>
               Ürün Detayları
             </Typography>
-            <Divider sx={{ mb: 2 }} />
-            <Grid container spacing={2}>
-              <Grid item xs={6}>
-                <Typography variant="subtitle2" color="text.secondary">
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                   Oluşturulma Tarihi
                 </Typography>
-                <Typography variant="body2">
-                  {new Date(product.createdAt).toLocaleDateString()}
+            <Typography variant="body1" sx={{ fontWeight: 500 }}>
+              {new Date(product.createdAt).toLocaleDateString('tr-TR', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              })}
                 </Typography>
               </Grid>
-              <Grid item xs={6}>
-                <Typography variant="subtitle2" color="text.secondary">
+          <Grid item xs={12} md={6}>
+            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                   Durum
                 </Typography>
-                <Typography variant="body2">
-                  {product.sold ? 'Satıldı' : 'Satışta'}
-                </Typography>
+            <Chip
+              label={product.sold ? 'Satıldı' : 'Satışta'}
+              color={product.sold ? 'error' : 'success'}
+              variant="outlined"
+            />
               </Grid>
             </Grid>
           </Paper>
-        </Grid>
-      </Grid>
 
       {product.nft && escrowDetails && <EscrowStatus />}
 

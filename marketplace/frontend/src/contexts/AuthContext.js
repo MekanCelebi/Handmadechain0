@@ -12,8 +12,15 @@ export const AuthProvider = ({ children }) => {
     const storedToken = localStorage.getItem('token');
     console.log('AuthContext - Initial load:', { storedUser, storedToken });
     if (storedUser && storedToken) {
-      setUser(JSON.parse(storedUser));
-      setToken(storedToken);
+      try {
+        setUser(JSON.parse(storedUser));
+        setToken(storedToken);
+      } catch (error) {
+        console.error('Error parsing stored user data:', error);
+        // Clear invalid data
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+      }
     }
     setLoading(false);
   }, []);

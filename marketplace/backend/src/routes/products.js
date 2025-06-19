@@ -72,9 +72,154 @@ const handleMulterError = (err, req, res, next) => {
 // Public routes
 router.get('/', getProducts);
 
+// Search products
+router.get('/search', async (req, res) => {
+  try {
+    const { q, category, minPrice, maxPrice, sort } = req.query;
+    
+    let query = {};
+    
+    // Text search
+    if (q) {
+      query.$or = [
+        { name: { $regex: q, $options: 'i' } },
+        { description: { $regex: q, $options: 'i' } },
+        { category: { $regex: q, $options: 'i' } }
+      ];
+    }
+    
+    // Category filter
+    if (category) {
+      query.category = { $regex: category, $options: 'i' };
+    }
+    
+    // Price range filter
+    if (minPrice || maxPrice) {
+      query.price = {};
+      if (minPrice) query.price.$gte = parseFloat(minPrice);
+      if (maxPrice) query.price.$lte = parseFloat(maxPrice);
+    }
+    
+    // Sort options
+    let sortOption = {};
+    if (sort === 'price-asc') {
+      sortOption = { price: 1 };
+    } else if (sort === 'price-desc') {
+      sortOption = { price: -1 };
+    } else if (sort === 'newest') {
+      sortOption = { createdAt: -1 };
+    } else if (sort === 'oldest') {
+      sortOption = { createdAt: 1 };
+    } else {
+      sortOption = { createdAt: -1 }; // Default: newest first
+    }
+    
+    const products = await Product.find(query)
+      .sort(sortOption)
+      .populate('creator', 'username')
+      .limit(50);
+    
+    res.json(products);
+  } catch (error) {
+    console.error('Search error:', error);
+    res.status(500).json({ message: 'Arama sırasında bir hata oluştu' });
+  }
+});
+
+// Get products by category
+router.get('/category/:category', async (req, res) => {
+  try {
+    const { category } = req.params;
+    const { sort, minPrice, maxPrice } = req.query;
+    
+    let query = { category: { $regex: category, $options: 'i' } };
+    
+    // Price range filter
+    if (minPrice || maxPrice) {
+      query.price = {};
+      if (minPrice) query.price.$gte = parseFloat(minPrice);
+      if (maxPrice) query.price.$lte = parseFloat(maxPrice);
+    }
+    
+    // Sort options
+    let sortOption = {};
+    if (sort === 'price-asc') {
+      sortOption = { price: 1 };
+    } else if (sort === 'price-desc') {
+      sortOption = { price: -1 };
+    } else if (sort === 'newest') {
+      sortOption = { createdAt: -1 };
+    } else if (sort === 'oldest') {
+      sortOption = { createdAt: 1 };
+    } else {
+      sortOption = { createdAt: -1 }; // Default: newest first
+    }
+    
+    const products = await Product.find(query)
+      .sort(sortOption)
+      .populate('creator', 'username')
+      .limit(50);
+    
+    res.json(products);
+  } catch (error) {
+    console.error('Category filter error:', error);
+    res.status(500).json({ message: 'Kategori filtreleme sırasında bir hata oluştu' });
+  }
+});
+
+// Get featured products
+router.get('/featured', async (req, res) => {
+  try {
+    const products = await Product.find({ featured: true })
+      .sort({ createdAt: -1 })
+      .populate('creator', 'username')
+      .limit(8);
+    
+    res.json(products);
+  } catch (error) {
+    console.error('Featured products error:', error);
+    res.status(500).json({ message: 'Öne çıkan ürünler yüklenirken bir hata oluştu' });
+  }
+});
+
+// Get latest products
+router.get('/latest', async (req, res) => {
+  try {
+    const products = await Product.find()
+      .sort({ createdAt: -1 })
+      .populate('creator', 'username')
+      .limit(8);
+    
+    res.json(products);
+  } catch (error) {
+    console.error('Latest products error:', error);
+    res.status(500).json({ message: 'En yeni ürünler yüklenirken bir hata oluştu' });
+  }
+});
+
 // Protected routes
 router.get('/my-products', auth, getMyProducts);
 router.get('/stats', auth, getStats);
+
+// Get product by token ID
+router.get('/by-token/:tokenId', auth, async (req, res) => {
+  try {
+    const { tokenId } = req.params;
+    
+    const product = await Product.findOne({
+      'nft.tokenId': tokenId
+    }).populate('creator', 'username');
+    
+    if (!product) {
+      return res.status(404).json({ message: 'Token ID ile ürün bulunamadı' });
+    }
+    
+    res.json(product);
+  } catch (error) {
+    console.error('Error fetching product by token ID:', error);
+    res.status(500).json({ message: 'Ürün getirilirken bir hata oluştu' });
+  }
+});
 
 // Ürün oluşturma ve güncelleme için özel middleware
 const handleProductUpload = (req, res, next) => {

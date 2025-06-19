@@ -15,6 +15,8 @@ import ProductDetail from './pages/ProductDetail';
 import CreateProduct from './pages/CreateProduct';
 import SellerDashboard from './pages/SellerDashboard';
 import MyProducts from './pages/MyProducts';
+import SearchResults from './pages/SearchResults';
+import CategoryPage from './pages/CategoryPage';
 import './App.css';
 
 const theme = createTheme({
@@ -60,6 +62,7 @@ function App() {
                   <Routes>
                     <Route path="/" element={<Home />} />
                     <Route path="/products" element={<Home />} />
+                    <Route path="/search" element={<SearchResults />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
                     <Route path="/profile" element={<Profile />} />
@@ -67,6 +70,7 @@ function App() {
                     <Route path="/create" element={<CreateProduct />} />
                     <Route path="/seller/dashboard" element={<SellerDashboard />} />
                     <Route path="/my-products" element={<MyProducts />} />
+                    <Route path="/category/:category" element={<CategoryPage />} />
                   </Routes>
                 </main>
               </div>
